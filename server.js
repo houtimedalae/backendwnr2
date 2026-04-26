@@ -1,151 +1,81 @@
-// backend/server.js
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
-const sqlite3 = require("sqlite3").verbose();
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
+/* =========================
+   🔐 MIDDLEWARE
+========================= */
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-const db = new sqlite3.Database("./school.db", (err) => {
-  if (err) console.error(err);
-  else console.log("SQLite connecté !");
-});
+/* =========================
+   📦 DATABASE
+========================= */
+const db = require("./database");
 
-// Tables
-db.run(`CREATE TABLE IF NOT EXISTS courses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  description TEXT,
-  price REAL,
-  hours TEXT,
-  category TEXT
-)`);
+/* =========================
+   📚 ROUTES
+========================= */
+app.use("/api/courses", require("./routes/courseRoutes"));
+app.use("/api/preinscriptions", require("./routes/preinscriptionRoutes"));
+app.use("/api/categories", require("./routes/categoryRoutes"));
+app.use("/api/events", require("./routes/eventRoutes"));
 
-db.run(`CREATE TABLE IF NOT EXISTS preinscriptions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  studentName TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  email TEXT NOT NULL,
-  courseId INTEGER,
-  validated INTEGER DEFAULT 0
-)`);
+/* =========================
+   🔐 LOGIN
+========================= */
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
 
-db.run(`CREATE TABLE IF NOT EXISTS categories (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
-)`);
+  try {
+    const result = await db.query(
+      "SELECT * FROM admin WHERE email = $1 AND password = $2",
+      [email, password]
+    );
 
-// --- Endpoints Courses ---
-app.get("/api/courses", (req, res) => {
-  db.all("SELECT * FROM courses", (err, rows) => {
-    if (err) return res.status(500).json(err);
-    res.json(rows);
-  });
-});
+    const admin = result.rows[0];
 
-app.post("/api/courses", (req, res) => {
-  const { title, description, price, hours, category } = req.body;
-  db.run(
-    `INSERT INTO courses (title, description, price, hours, category) VALUES (?, ?, ?, ?, ?)`,
-    [title, description, price, hours, category],
-    function (err) {
-      if (err) return res.status(500).json(err);
-      res.json({ id: this.lastID, title, description, price, hours, category });
+    if (!admin) {
+      return res.status(401).json({ message: "Identifiants incorrects" });
     }
-  );
-});
 
-// --- Endpoints Preinscriptions ---
-app.get("/api/preinscriptions", (req, res) => {
-  db.all("SELECT * FROM preinscriptions", (err, rows) => {
-    if (err) return res.status(500).json(err);
-    res.json(rows);
-  });
-});
-
-app.post("/api/preinscriptions", (req, res) => {
-  const { studentName, phone, email, courseId } = req.body;
-  db.run(
-    `INSERT INTO preinscriptions (studentName, phone, email, courseId) VALUES (?, ?, ?, ?)`,
-    [studentName, phone, email, courseId],
-    function (err) {
-      if (err) return res.status(500).json(err);
-      res.json({ id: this.lastID });
-    }
-  );
-});
-
-// Valider une préinscription
-app.put("/api/preinscriptions/:id", (req, res) => {
-  const { id } = req.params;
-  const { validated } = req.body; // 0 ou 1
-  db.run(
-    `UPDATE preinscriptions SET validated=? WHERE id=?`,
-    [validated ? 1 : 0, id],
-    function (err) {
-      if (err) return res.status(500).json(err);
-      res.json({ updated: id });
-    }
-  );
-});
-
-// Supprimer une préinscription
-app.delete("/api/preinscriptions/:id", (req, res) => {
-  const { id } = req.params;
-  db.run(`DELETE FROM preinscriptions WHERE id=?`, [id], function (err) {
-    if (err) return res.status(500).json(err);
-    res.json({ deleted: id });
-  });
-});
-
-// --- Endpoints Categories ---
-app.get("/api/categories", (req, res) => {
-  db.all("SELECT * FROM categories", (err, rows) => {
-    if (err) return res.status(500).json(err);
-    res.json(rows);
-  });
-});
-
-app.post("/api/categories", (req, res) => {
-  const { name } = req.body;
-  db.run(`INSERT INTO categories (name) VALUES (?)`, [name], function (err) {
-    if (err) return res.status(500).json(err);
-    res.json({ id: this.lastID, name });
-  });
-});
-
-app.delete("/api/categories/:id", (req, res) => {
-  const { id } = req.params;
-  db.run(`DELETE FROM categories WHERE id=?`, [id], function (err) {
-    if (err) return res.status(500).json(err);
-    res.json({ deleted: id });
-  });
-});
-
-// --- Dashboard stats ---
-app.get("/api/dashboard-stats", (req, res) => {
-  db.serialize(() => {
-    db.get("SELECT COUNT(*) AS courses FROM courses", (err, courseRow) => {
-      if (err) return res.status(500).json(err);
-      db.get(
-        "SELECT COUNT(*) AS preInscriptions FROM preinscriptions",
-        (err, preRow) => {
-          if (err) return res.status(500).json(err);
-          res.json({
-            courses: courseRow.courses,
-            events: 0,
-            preInscriptions: preRow.preInscriptions,
-          });
-        }
-      );
+    res.json({
+      message: "Login réussi",
+      admin: {
+        id: admin.id,
+        email: admin.email,
+      },
     });
-  });
+  } catch (err) {
+    res.status(500).json(err);
+  }
 });
 
+/* =========================
+   📊 DASHBOARD STATS
+========================= */
+app.get("/api/dashboard-stats", async (req, res) => {
+  try {
+    const courses = await db.query("SELECT COUNT(*) FROM courses");
+    const preIns = await db.query("SELECT COUNT(*) FROM preinscriptions");
+    const events = await db.query("SELECT COUNT(*) FROM events");
+
+    res.json({
+      courses: parseInt(courses.rows[0].count),
+      preInscriptions: parseInt(preIns.rows[0].count),
+      events: parseInt(events.rows[0].count),
+    });
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+/* =========================
+   🚀 SERVER START
+========================= */
 app.listen(PORT, () => {
-  console.log(`Backend lancé sur http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
