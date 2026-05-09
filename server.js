@@ -49,8 +49,10 @@ app.post("/api/auth/login", async (req, res) => {
         email: admin.email,
       },
     });
+
   } catch (err) {
-    res.status(500).json(err);
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -59,19 +61,93 @@ app.post("/api/auth/login", async (req, res) => {
 ========================= */
 app.get("/api/dashboard-stats", async (req, res) => {
   try {
+
+    // TOTALS (SAFE)
     const courses = await db.query("SELECT COUNT(*) FROM courses");
-    const preIns = await db.query("SELECT COUNT(*) FROM preinscriptions");
     const events = await db.query("SELECT COUNT(*) FROM events");
+    const preIns = await db.query("SELECT COUNT(*) FROM preinscriptions");
+
+    // VALIDATED FIX SAFE
+    const validated = await db.query(`
+      SELECT 
+        validated,
+        COUNT(*)::int AS count
+      FROM preinscriptions
+      GROUP BY validated
+    `);
+
+    // COURSES STATS (SAFE JOIN)
+    const byCourse = await db.query(`
+      SELECT 
+        c.title,
+        COUNT(p.id)::int AS count
+      FROM preinscriptions p
+      LEFT JOIN courses c ON p.courseid = c.id
+      GROUP BY c.title
+      ORDER BY count DESC
+    `);
+
+    // TOP COURSE
+    const topCourse = await db.query(`
+      SELECT 
+        c.title,
+        COUNT(p.id)::int AS count
+      FROM preinscriptions p
+      LEFT JOIN courses c ON p.courseid = c.id
+      GROUP BY c.title
+      ORDER BY count DESC
+      LIMIT 1
+    `);
+
+    // LOW COURSE
+    const lowCourse = await db.query(`
+      SELECT 
+        c.title,
+        COUNT(p.id)::int AS count
+      FROM preinscriptions p
+      LEFT JOIN courses c ON p.courseid = c.id
+      GROUP BY c.title
+      ORDER BY count ASC
+      LIMIT 1
+    `);
 
     res.json({
-      courses: parseInt(courses.rows[0].count),
-      preInscriptions: parseInt(preIns.rows[0].count),
-      events: parseInt(events.rows[0].count),
+      courses: Number(courses.rows[0].count),
+      events: Number(events.rows[0].count),
+      preInscriptions: Number(preIns.rows[0].count),
+
+      validated: validated.rows.map(v => ({
+        validated: v.validated,
+        count: Number(v.count)
+      })),
+
+      byCourse: byCourse.rows.map(c => ({
+        title: c.title || "Unknown",
+        count: Number(c.count)
+      })),
+
+      topCourse: topCourse.rows[0]
+        ? {
+            title: topCourse.rows[0].title || "Unknown",
+            count: Number(topCourse.rows[0].count)
+          }
+        : null,
+
+      lowCourse: lowCourse.rows[0]
+        ? {
+            title: lowCourse.rows[0].title || "Unknown",
+            count: Number(lowCourse.rows[0].count)
+          }
+        : null,
     });
+
   } catch (err) {
-    res.status(500).json(err);
+    console.error("DASHBOARD ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
+
+
 
 /* =========================
    🚀 SERVER START
