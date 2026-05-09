@@ -58,6 +58,7 @@ app.post("/api/auth/login", async (req, res) => {
       },
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -132,6 +133,7 @@ app.get("/api/dashboard-stats", async (req, res) => {
           }
         : null,
     });
+
   } catch (err) {
     console.error("DASHBOARD ERROR:", err);
     res.status(500).json({ error: err.message });
