@@ -11,7 +11,7 @@ router.get("/", async (req, res) => {
     res.json(data);
   } catch (err) {
     console.log(err);
-    res.status(500).json(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -22,7 +22,6 @@ router.post("/", async (req, res) => {
   try {
     const { studentName, phone, email, courseId } = req.body;
 
-    // validation
     if (!studentName || !phone || !email || !courseId) {
       return res.status(400).json({ error: "Champs requis" });
     }
@@ -46,18 +45,20 @@ router.post("/", async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    res.status(500).json(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 /* =========================
-   ✏️ VALIDATE (UPDATE)
+   ✏️ VALIDATE
 ========================= */
 router.put("/:id", async (req, res) => {
   try {
+    const validated = Boolean(req.body.validated);
+
     const updated = await Preinscription.validate(
       req.params.id,
-      req.body.validated
+      validated
     );
 
     if (!updated) {
@@ -68,7 +69,7 @@ router.put("/:id", async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    res.status(500).json(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -81,7 +82,7 @@ router.delete("/:id", async (req, res) => {
     res.json({ deleted: req.params.id });
   } catch (err) {
     console.log(err);
-    res.status(500).json(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
