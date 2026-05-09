@@ -6,7 +6,7 @@ class Preinscription {
     const result = await db.query(`
       SELECT 
         p.id,
-        p.studentname AS "studentName",
+        p.student_name AS "studentName",
         p.phone,
         p.email,
         p.course_id AS "courseId",
