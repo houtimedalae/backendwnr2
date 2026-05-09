@@ -26,7 +26,7 @@ class Preinscription {
 
     const result = await db.query(
       `INSERT INTO preinscriptions 
-       (studentname, phone, email, course_id)
+       (student_name, phone, email, course_id)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [studentName, phone, email, courseId]
