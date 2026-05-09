@@ -17,7 +17,7 @@ static async getAll() {
       p.validated,
       p.created_at AS "createdAt"
     FROM preinscriptions p
-    LEFT JOIN courses c ON p.courseid = c.id
+    LEFT JOIN courses c ON p.course_id = c.id
     ORDER BY p.id DESC
   `);
 
@@ -32,7 +32,7 @@ static async getAll() {
 
   const result = await db.query(
     `INSERT INTO preinscriptions 
-     (studentname, phone, email, courseid)
+     (studentname, phone, email, course_id)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,
     [studentName, phone, email, courseId]
